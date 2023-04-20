@@ -95,6 +95,7 @@ func (circuit *CircuitBreaker) IsOpen() bool {
 	circuit.mutex.RUnlock()
 
 	if o {
+		log.Printf("hystrix-go: opening circuit %v, circuit.forceOpen:%v, circuit.open:%v", circuit.Name, circuit.forceOpen, circuit.open)
 		return true
 	}
 
@@ -127,6 +128,11 @@ func (circuit *CircuitBreaker) allowSingleTest() bool {
 	if circuit.open && now > openedOrLastTestedTime+getSettings(circuit.Name).SleepWindow.Nanoseconds() {
 		swapped := atomic.CompareAndSwapInt64(&circuit.openedOrLastTestedTime, openedOrLastTestedTime, now)
 		if swapped {
+			// 交换了最后一次尝试更新时间后，需要close circuit，否则每次都需要等待重试窗口才能恢复一次请求，后面的请求依然会被熔断
+			//circuit.setClose() 该方法里也加了读写锁，会卡住
+			circuit.open = false
+			circuit.metrics.Reset()
+
 			log.Printf("hystrix-go: allowing single test to possibly close circuit %v", circuit.Name)
 		}
 		return swapped
@@ -165,6 +171,8 @@ func (circuit *CircuitBreaker) setClose() {
 
 // ReportEvent records command metrics for tracking recent error rates and exposing data to the dashboard.
 func (circuit *CircuitBreaker) ReportEvent(eventTypes []string, start time.Time, runDuration time.Duration) error {
+	log.Printf("hystrix-go: report event, eventTypes:%v", eventTypes)
+
 	if len(eventTypes) == 0 {
 		return fmt.Errorf("no event types sent for metrics")
 	}

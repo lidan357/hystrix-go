@@ -4,7 +4,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/afex/hystrix-go/hystrix/metric_collector"
 	"github.com/afex/hystrix-go/hystrix/rolling"
 )
 
@@ -86,7 +85,8 @@ func (m *metricExchange) IncrementMetrics(wg *sync.WaitGroup, collector metricCo
 		r.Errors = 1
 	case "short-circuit":
 		r.ShortCircuits = 1
-		r.Errors = 1
+		// 熔断相关报错，不记录到Errors中
+		//r.Errors = 1
 	case "timeout":
 		r.Timeouts = 1
 		r.Errors = 1
@@ -141,6 +141,7 @@ func (m *metricExchange) ErrorPercent(now time.Time) int {
 	if reqs > 0 {
 		errPct = (float64(errs) / float64(reqs)) * 100
 	}
+	log.Printf("hystrix-go: calculate error rate, errs:%f, reqs:%f, errPct:%f", errs, reqs, errPct)
 
 	return int(errPct + 0.5)
 }

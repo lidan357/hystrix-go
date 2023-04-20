@@ -71,6 +71,8 @@ func Go(name string, run runFunc, fallback fallbackFunc) chan error {
 //
 // Define a fallback function if you want to define some code to execute during outages.
 func GoC(ctx context.Context, name string, run runFuncC, fallback fallbackFuncC) chan error {
+	log.Printf("hystrix-go: excute command, name:%v", name)
+
 	cmd := &command{
 		run:      run,
 		fallback: fallback,
@@ -162,6 +164,8 @@ func GoC(ctx context.Context, name string, run runFuncC, fallback fallbackFuncC)
 			defer reportAllEvent()
 			cmd.runDuration = time.Since(runStart)
 			returnTicket()
+			// 这里还需获得值的反射值对象，判断其是否为nil
+			//if runErr != nil && !reflect.ValueOf(runErr).IsNil() {
 			if runErr != nil {
 				cmd.errorWithFallback(ctx, runErr)
 				return
@@ -261,6 +265,8 @@ func (c *command) reportEvent(eventType string) {
 
 // errorWithFallback triggers the fallback while reporting the appropriate metric events.
 func (c *command) errorWithFallback(ctx context.Context, err error) {
+	log.Printf("hystrix-go: error with fallback, err:%v", err)
+
 	eventType := "failure"
 	if err == ErrCircuitOpen {
 		eventType = "short-circuit"
@@ -272,7 +278,10 @@ func (c *command) errorWithFallback(ctx context.Context, err error) {
 		eventType = "context_canceled"
 	} else if err == context.DeadlineExceeded {
 		eventType = "context_deadline_exceeded"
-	}
+	} /*else if err == nil {
+	    // 处理err为nil的情况
+	    eventType = "success"
+	}*/
 
 	c.reportEvent(eventType)
 	fallbackErr := c.tryFallback(ctx, err)
